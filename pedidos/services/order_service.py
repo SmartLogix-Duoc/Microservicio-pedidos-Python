@@ -1,4 +1,4 @@
-from pedidos.repositories.mongo_client import MongoPedidoRepository
+from pedidos.database.mongo_connection import db
 from .Factory import OrderFactory
 
 class OrderService:
@@ -6,7 +6,7 @@ class OrderService:
 
     def __init__(self):
         # Instanciamos la conexión a la base de datos
-        self.repository = MongoPedidoRepository()
+        self.connection = db['pedidos']
 
     def procesar_nuevo_pedido(self, user_id: str, items: list, tipo: str):
         # 1. Usamos el Factory Method para crear y validar el pedido

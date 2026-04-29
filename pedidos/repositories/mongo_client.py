@@ -10,8 +10,6 @@ class MongoPedidoRepository:
     """
     def __init__(self):
         # Nos conectamos a MongoDB (esto luego se pone en variables de entorno)
-        self.client = MongoClient('mongodb://localhost:27017/')
-        self.db = self.client['ecommerce_pymes_db']
         self.collection = self.db['pedidos']
 
     # ==========================================

@@ -1,6 +1,6 @@
 # Entornos virtuales
 venv/
-env/
+
 
 # Archivos compilados de Python
 __pycache__/
@@ -8,4 +8,5 @@ __pycache__/
 
 # Variables de entorno y base de datos local
 .env
+*.env
 db.sqlite3
