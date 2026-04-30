@@ -31,3 +31,10 @@ python manage.py migrate
 5. Levantar el Servidor
 Bash
 python manage.py runserver
+
+6. Para conectarse a la base de datos se requiere pedirle la URI al anfitrion y crearla en un entorno .env que diga
+    .env
+    EJEMPLO
+    MONGO_URI = MONGO_URI=mongodb+srv://maxi:TuContraseñaReal@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+
+    
