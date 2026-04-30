@@ -1,25 +1,30 @@
 import os
-from dotenv import load_dotenv
+from pathlib import Path
 from pymongo import MongoClient
+from dotenv import load_dotenv
 
+# 1. Calculamos la ruta EXACTA a la raíz de tu proyecto
+# __file__ es este archivo. Subimos 3 niveles: database -> pedidos -> Raíz
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ENV_PATH = BASE_DIR / '.env'
 
-# Buscamos el .env en la raíz (dos niveles arriba de este archivo)
-load_dotenv()
+# 2. Prints de diagnóstico (luego los borramos)
+print(f"DEBUG - Buscando archivo .env exactamente en: {ENV_PATH}")
+print(f"DEBUG - ¿El archivo físico realmente existe ahí?: {ENV_PATH.exists()}")
 
-class MongoDBClient:
-    """Clase Singleton para gestionar la conexión a MongoDB"""
-    _client = None
+# 3. Forzamos a dotenv a leer ese archivo específico
+load_dotenv(dotenv_path=ENV_PATH)
 
-    @classmethod
-    def get_db(cls):
-        if cls._client is None:
-            uri = os.getenv("MONGO_URI")
-            if not uri:
-                raise ValueError("Variable MONGO_URI no encontrada")
-            cls._client = MongoClient(uri)
-        
-        # Retornamos la base de datos específica
-        return cls._client['ecommerce_pedidos']
+# 4. Extraemos la variable
+mi_uri_secreta = os.getenv("MONGO_URI")
+print(f"DEBUG - URI CARGADA: {mi_uri_secreta}")
 
-# Instancia lista para usar
-db = MongoDBClient.get_db()
+if not mi_uri_secreta:
+    raise ValueError("¡Error! Variable MONGO_URI no encontrada")
+
+# 5. Conexión a Mongo
+try:
+    client = MongoClient(mi_uri_secreta)
+    db = client['ecommerce_pedidos']
+except Exception as e:
+    print(f"Error al conectar a MongoDB: {e}")
