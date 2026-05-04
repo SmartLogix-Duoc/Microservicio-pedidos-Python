@@ -1,36 +1,44 @@
 from pedidos.database.mongo_connection import db
 from .Factory import OrderFactory
+# IMPORTANTE: Asegúrate de importar tu repositorio real aquí
+from pedidos.repositories.mongo_client import OrderRepository
 
 class OrderService:
-    #Capa de servicio CSR
+    """Capa de Servicio (CSR) - Contiene la lógica de negocio"""
 
     def __init__(self):
-        # Instanciamos la conexión a la base de datos
-        self.connection = db['pedidos']
+        # Seleccionamos la colección en Mongo (equivalente a la tabla). 
+        # La cambié a 'orders' para mantener el inglés, pero si tu BD 
+        # ya creó 'test_pedidos' o 'pedidos', puedes dejarla así.
+        self.collection = db['orders'] 
+        
+        # Instanciamos el repositorio pasándole la conexión a la BD
+        self.repository = OrderRepository() 
 
-    def procesar_nuevo_pedido(self, user_id: str, items: list, tipo: str):
+    def process_new_order(self, user_id: str, items: list, order_type: str):
         # 1. Usamos el Factory Method para crear y validar el pedido
-        pedido_creado = OrderFactory.crear_pedido(user_id, items, tipo)
+        created_order = OrderFactory.create_order(user_id, items, order_type)
         
         # 2. Usamos el Repositorio para guardarlo en MongoDB
-        pedido_guardado = self.repository.crear_pedido(pedido_creado)
+        saved_order = self.repository.create_order(created_order)
         
         # 3. Devolvemos el resultado en formato diccionario para el Controller
-        return pedido_guardado.model_dump()
+        return saved_order.model_dump()
 
-    def obtener_todos_los_pedidos(self):
+    def get_all_orders(self):
         # Le pedimos al repositorio todos los pedidos
-        pedidos = self.repository.obtener_todos()
+        orders = self.repository.get_all()
+        
         # Los devolvemos como una lista de diccionarios
-        return [p.model_dump() for p in pedidos]
+        return [order.model_dump() for order in orders]
     
-    def actualizar_estado_pedido(self, pedido_id: str, nuevo_estado: str):
-        # 1. Validamos que el estado sea correcto según nuestro Enum
+    def update_order_status(self, order_id: str, new_status: str):
+        # 1. Validamos que el estado sea correcto según nuestro Enum (opcional aquí o en modelo)
         # 2. Llamamos al repositorio para actualizarlo en MongoDB
-        pedido_actualizado = self.repository.actualizar_estado(pedido_id, nuevo_estado)
-        return pedido_actualizado
+        updated_order = self.repository.update_status(order_id, new_status)
+        return updated_order
 
-    def eliminar_pedido(self, pedido_id: str):  
+    def delete_order(self, order_id: str):  
         # 1. Le decimos al repositorio que lo borre
-        resultado = self.repository.eliminar(pedido_id)
-        return resultado
+        result = self.repository.delete(order_id)
+        return result

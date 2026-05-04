@@ -13,5 +13,5 @@ class OrderState(str, Enum):
 
 class OrderType(str, Enum):
     #Define los tipos de pedidos para nuestro Factory Method Posterior
-    NATIONAL = "Nacional"
-    INTERNATIONAL = "Internacional"
+    NATIONAL = "NATIONAL"
+    INTERNATIONAL = "INTERNATIONAL"

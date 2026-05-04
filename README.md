@@ -36,5 +36,3 @@ python manage.py runserver
     .env
     EJEMPLO
     MONGO_URI = MONGO_URI=mongodb+srv://maxi:TuContraseñaReal@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
-
-    

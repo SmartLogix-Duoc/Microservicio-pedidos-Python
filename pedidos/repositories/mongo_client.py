@@ -1,61 +1,62 @@
-# pedidos/repositories/mongo_client.py
-from pymongo import MongoClient
-from pedidos.domain.entities import Order
 from typing import List, Optional
+from pedidos.database.mongo_connection import db
+from pedidos.domain.entities import Order
 
-class MongoPedidoRepository:
+class OrderRepository:
     """
-    Esta clase se encarga ÚNICAMENTE de hablar con MongoDB.
-    No toma decisiones de negocio, solo obedece órdenes de guardar, leer, etc.
+    Capa de Repositorio (CSR).
+    Se encarga ÚNICAMENTE de la persistencia en MongoDB.
     """
     def __init__(self):
-        # Nos conectamos a MongoDB (esto luego se pone en variables de entorno)
-        self.collection = self.db['pedidos']
+        # Usamos la colección 'orders' (en inglés para mantener el estándar)
+        self.collection = db['orders']
 
     # ==========================================
-    # C - CREATE (Crear)
+    # C - CREATE
     # ==========================================
-    def crear_pedido(self, pedido: Order) -> Order:
-        # Convertimos nuestra Entidad Pydantic a un diccionario (JSON) que Mongo entienda
-        pedido_dict = pedido.model_dump()
+    def create_order(self, order: Order) -> Order:
+        # Convertimos la Entidad Pydantic a diccionario
+        order_dict = order.model_dump()
         
-        # Insertamos en la base de datos
-        self.collection.insert_one(pedido_dict)
-        return pedido
+        # Insertamos en MongoDB
+        self.collection.insert_one(order_dict)
+        return order
 
     # ==========================================
-    # R - READ (Leer)
+    # R - READ
     # ==========================================
-    def obtener_por_id(self, order_id: str) -> Optional[Order]:
-        # Buscamos en Mongo el documento que coincida con el orderId
-        data = self.collection.find_one({"orderId": order_id})
+    def get_by_id(self, order_id: str) -> Optional[Order]:
+        # Buscamos por el campo order_id (definido en nuestra entidad)
+        data = self.collection.find_one({"order_id": order_id})
         
         if data:
-            # Si lo encontramos, lo volvemos a convertir en nuestra Entidad Pedido
+            # Eliminamos el _id de Mongo si Pydantic no lo espera o lo manejamos
+            data.pop('_id', None) 
             return Order(**data)
         return None
 
-    def obtener_todos(self) -> List[Order]:
-        # Traemos todos los pedidos
+    def get_all(self) -> List[Order]:
         cursor = self.collection.find()
-        # Convertimos la lista de diccionarios a una lista de Entidades Pedido
-        return [Order(**doc) for doc in cursor]
+        orders = []
+        for doc in cursor:
+            doc.pop('_id', None) # Limpiamos el ID interno de Mongo
+            orders.append(Order(**doc))
+        return orders
 
     # ==========================================
-    # U - UPDATE (Actualizar)
+    # U - UPDATE
     # ==========================================
-    def actualizar_estado(self, order_id: str, nuevo_estado: str) -> bool:
-        # Actualizamos solo el campo "estado" de un pedido específico
-        resultado = self.collection.update_one(
-            {"orderId": order_id},
-            {"$set": {"estado": nuevo_estado}}
+    def update_status(self, order_id: str, new_status: str) -> bool:
+        # Actualizamos el campo 'status' (alineado con la entidad)
+        result = self.collection.update_one(
+            {"order_id": order_id},
+            {"$set": {"status": new_status}}
         )
-        return resultado.modified_count > 0
+        return result.modified_count > 0
 
     # ==========================================
-    # D - DELETE (Eliminar)
+    # D - DELETE
     # ==========================================
-    def eliminar_pedido(self, order_id: str) -> bool:
-        # Borramos el pedido de la base de datos
-        resultado = self.collection.delete_one({"orderId": order_id})
-        return resultado.deleted_count > 0
+    def delete_order(self, order_id: str) -> bool:
+        result = self.collection.delete_one({"order_id": order_id})
+        return result.deleted_count > 0

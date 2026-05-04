@@ -17,13 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from pedidos.controllers.api_v1 import PedidoController
+from pedidos.controllers.api_v1 import OrderController
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     #Rutas para el controlador de pedidos
-    path('api/v1/pedidos', PedidoController.as_view(), name="pedidos_Api"),
+    path('api/v1/orders/', OrderController.as_view(), name="orders-api"),
 
     # Rutas para generar la documentación Swagger
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
