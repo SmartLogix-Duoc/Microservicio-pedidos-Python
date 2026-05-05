@@ -14,10 +14,10 @@ def probar_conexion():
         # 2. Insertamos en una colección llamada 'test_pedidos'
         resultado = db.test_pedidos.insert_one(pedido_test)
         
-        print(f"✅ ¡Conexión exitosa! ID del pedido insertado: {resultado.inserted_id}")
+        print(f"¡Conexión exitosa! ID del pedido insertado: {resultado.inserted_id}")
         
     except Exception as e:
-        print(f"❌ Error en la prueba: {e}")
+        print(f"Error en la prueba: {e}")
 
 if __name__ == "__main__":
     probar_conexion()
