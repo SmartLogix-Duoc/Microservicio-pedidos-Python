@@ -1,9 +1,10 @@
 from enum import Enum
 from rest_framework import serializers, status, viewsets
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, inline_serializer
+from rest_framework.permissions import AllowAny
+
 from pedidos.services.order_service import OrderService
-from rest_framework.permissions import IsAuthenticated
 
 # ==========================================
 # 1. ENUMS
@@ -24,9 +25,8 @@ class OrderType(str, Enum):
 # 2. SERIALIZERS
 # ==========================================
 class ItemOrderSerializer(serializers.Serializer):
-    product_id = serializers.CharField()
-    amount = serializers.IntegerField()
-    unit_price = serializers.FloatField()
+    product_id = serializers.CharField(help_text="ID del producto en el inventario")
+    amount = serializers.IntegerField(help_text="Cantidad a pedir")
 
 class OrderSerializer(serializers.Serializer):
     order_id = serializers.CharField(read_only=True)
@@ -47,9 +47,10 @@ class OrderStatusUpdateSerializer(serializers.Serializer):
 
 class OrderUpdateResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
-    datos_actualizados = OrderStatusUpdateSerializer()
+    datos = OrderStatusUpdateSerializer()
 
 class ErrorResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField(default=False)
     error = serializers.CharField(help_text="Descripción detallada del problema")
 
 
@@ -57,14 +58,27 @@ class ErrorResponseSerializer(serializers.Serializer):
 # 3. CONTROLLER (ViewSet)
 # ==========================================
 class OrderController(viewsets.ViewSet):
+    authentication_classes = [] 
+    permission_classes = [AllowAny] 
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.service = OrderService()
 
+    # GET /api/orders/
     @extend_schema(
         summary="Listar todos los pedidos",
-        responses={200: OrderSerializer(many=True)},
+        description="Obtiene una lista completa de todas las órdenes en la base de datos.",
+        responses={
+            200: inline_serializer(
+                name='ListOrdersResponse',
+                fields={
+                    'success': serializers.BooleanField(),
+                    'data': OrderSerializer(many=True)
+                }
+            ),
+            500: ErrorResponseSerializer
+        },
         tags=["Orders"]
     )
     def list(self, request):
@@ -74,51 +88,75 @@ class OrderController(viewsets.ViewSet):
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @extend_schema(
-        summary="Obtener un pedido por UUID",
-        parameters=[
-            OpenApiParameter(name='id', type=str, location=OpenApiParameter.PATH, description='UUID del pedido (order_id)')
-        ],
-        responses={200: OrderSerializer, 404: ErrorResponseSerializer},
-        tags=["Orders"]
-    )
-    def retrieve(self, request, pk=None):
-        try:
-            # Buscamos por el UUID (pk) usando el servicio
-            order = self.service.get_order_by_id(pk)
-            if not order:
-                return Response({"error": f"Pedido {pk} no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-            return Response({"success": True, "data": order}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    # POST /api/orders/
     @extend_schema(
         summary="Crear un nuevo pedido",
+        description="Registra una nueva orden. Se comunicará con el schema 'pedidos'.",
+        parameters=[
+            OpenApiParameter(
+                name="Authorization",
+                description="Token JWT del usuario (ej: Bearer eyJhb...)",
+                required=True,
+                type=str,
+                location=OpenApiParameter.HEADER
+            )
+        ],
         request=OrderSerializer,
-        responses={201: OrderSerializer, 400: ErrorResponseSerializer},
-        tags=["Orders"]
+        responses={
+            201: inline_serializer(
+                name='CreateOrderResponse',
+                fields={
+                    'success': serializers.BooleanField(),
+                    'data': OrderSerializer()
+                }
+            ),
+            400: ErrorResponseSerializer,
+            401: OpenApiResponse(description="No Autorizado - Falta el token")
+        },
+        tags=["Orders"],
+        examples=[
+            OpenApiExample(
+                "Ejemplo de Pedido",
+                value={
+                    "user_id": "usr_998877",
+                    "order_type": "NATIONAL",
+                    "items": [
+                        {"product_id": "prod_123", "amount": 2},
+                        {"product_id": "prod_456", "amount": 1}
+                    ]
+                }
+            )
+        ]
     )
     def create(self, request):
         try:
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return Response({"error": "No se proporcionó el header de Authorization"}, status=status.HTTP_401_UNAUTHORIZED)
+
+            token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
             data = request.data
+            
             new_order = self.service.process_new_order(
-                data.get('user_id'), 
-                data.get('items'), 
-                data.get('order_type')
+                user_id=data.get('user_id'), 
+                items_raw=data.get('items'), 
+                order_type=data.get('order_type'),
+                token=token 
             )
             return Response({"success": True, "data": new_order}, status=status.HTTP_201_CREATED)
-        except ValueError as ve:
-            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+            return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    # PATCH /api/orders/{id}/
     @extend_schema(
-        summary="Actualizar estado de un pedido",
-        parameters=[
-            OpenApiParameter(name='id', type=str, location=OpenApiParameter.PATH, description='UUID del pedido')
-        ],
+        summary="Actualizar estado del pedido",
+        description="Modifica únicamente el estado de una orden existente por su ID.",
         request=OrderStatusUpdateSerializer,
-        responses={200: OrderUpdateResponseSerializer, 404: ErrorResponseSerializer},
+        responses={
+            200: OrderUpdateResponseSerializer,
+            400: ErrorResponseSerializer,
+            404: OpenApiResponse(description="Pedido no encontrado")
+        },
         tags=["Orders"]
     )
     def update(self, request, pk=None):
@@ -126,33 +164,25 @@ class OrderController(viewsets.ViewSet):
         if not serializer.is_valid():
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Enviamos el UUID (pk) al servicio
         actualizado = self.service.update_order_status(pk, serializer.validated_data.get('status'))
 
         if not actualizado:
-            return Response({"error": f"No se pudo actualizar. UUID {pk} no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": f"No se pudo actualizar. ID {pk} no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({
-            "message": f"Pedido {pk} actualizado con éxito",
-            "datos_actualizados": serializer.validated_data
-        }, status=status.HTTP_200_OK)
+        return Response({"message": f"Pedido {pk} actualizado", "datos": serializer.validated_data}, status=status.HTTP_200_OK)
 
+    # DELETE /api/orders/{id}/
     @extend_schema(
-        summary="Eliminar pedido",
-        parameters=[
-            OpenApiParameter(name='id', type=str, location=OpenApiParameter.PATH, description='UUID del pedido')
-        ],
-        responses={204: None, 404: ErrorResponseSerializer},
+        summary="Eliminar un pedido",
+        description="Elimina físicamente una orden de la base de datos usando su ID.",
+        responses={
+            204: OpenApiResponse(description="Eliminado exitosamente (Sin contenido)"),
+            404: OpenApiResponse(description="Pedido no encontrado")
+        },
         tags=["Orders"]
     )
     def destroy(self, request, pk=None):
-        # Conectamos el borrado real por UUID
         eliminado = self.service.delete_order(pk)
-
         if not eliminado:
-            return Response(
-                {"error": f"No se encontró el pedido con UUID {pk}."}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
+            return Response({"error": "No encontrado"}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)

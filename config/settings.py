@@ -10,9 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 from datetime import timedelta
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -130,18 +133,32 @@ REST_FRAMEWORK = {
     ),
 }
 
+# 3. Configuración de Swagger (Para que vuelva a salir el candado)
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'API de Pedidos - SmartLogix',
-    'DESCRIPTION': 'Documentación Swagger con cada peticion HTTP.',
+    'TITLE': 'Pedidos API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'APPEND_COMPONENTS': {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": "Escribe: Bearer <tu_token>"
+            }
+        }
+    },
+    'SECURITY': [{"bearerAuth": []}],
 }
 
-# SIMPLE_JWT = {
-#     # IMPORTANTE: Esta clave debe ser idéntica a la del microservicio de Auth.
-#     # Por ahora usaremos la SECRET_KEY de este Django para probar, pero en producción 
-#     # deberías leerla de tu archivo .env
-#     'SIGNING_KEY': SECRET_KEY, 
-#     'AUTH_HEADER_TYPES': ('Bearer',), # El token vendrá como "Bearer <token>"
-#     'ALGORITHM': 'HS256',
-# }
+JWT_KEY = os.getenv('JWT_SECRET_KEY')
+load_dotenv()
+    
+SIMPLE_JWT = {
+    'SIGNING_KEY': str(JWT_KEY), 
+    'ALGORITHM': 'HS256',
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',      # Java usa Long id o String id internamente
+    'USER_ID_CLAIM': 'userId',  # Este debe coincidir con el JSON del token de tus amigos
+}

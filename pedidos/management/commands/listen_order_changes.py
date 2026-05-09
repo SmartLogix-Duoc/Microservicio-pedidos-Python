@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from pedidos.repositories.mongo_client import OrderRepository
+from pedidos.repositories.supabase_client import OrderRepository
 
 class Command(BaseCommand):
     help = 'Escucha cambios en tiempo real en la colección de pedidos mediante MongoDB Change Streams'

@@ -1,17 +1,16 @@
-
-
 from pydantic import BaseModel, Field
 from typing import List
 from datetime import datetime
 import uuid
-from .enums import OrderType # Asegúrate de importar bien tu enum
-from .enums import OrderState
+from .enums import OrderType, OrderState
+
 class ItemOrder(BaseModel):
     product_id: str
     amount: int = Field(gt=0, description="La cantidad debe ser mayor a 0")
     unit_price: float = Field(ge=0, description="El precio no puede ser negativo")
 
 class Order(BaseModel):
+    # Tu lógica de UUID para IDs únicos en MongoDB
     order_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     items: List[ItemOrder] 
