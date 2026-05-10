@@ -84,8 +84,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres.ctyyknbxolioclpqxuzo', 
+        'PASSWORD': 'UvPLzZ1XsViFXVSE',
+        'HOST': 'aws-1-us-west-1.pooler.supabase.com',
+        'PORT': '6543',
+        'OPTIONS': {
+            'options': '-c search_path=pedidos,public' 
+        },
     }
 }
 
@@ -142,10 +149,10 @@ SPECTACULAR_SETTINGS = {
     'APPEND_COMPONENTS': {
         "securitySchemes": {
             "bearerAuth": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "Authorization",
-                "description": "Escribe: Bearer <tu_token>"
+                "type": "http",          # Cambiado de "apiKey" a "http"
+                "scheme": "bearer",      # Especificamos que el esquema es bearer
+                "bearerFormat": "JWT",   # (Opcional) Ayuda a herramientas cliente a saber el formato
+                "description": "Pega tu token JWT directamente aquí (Swagger agregará 'Bearer' automáticamente)"
             }
         }
     },

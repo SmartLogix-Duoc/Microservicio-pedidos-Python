@@ -65,6 +65,7 @@ class OrderController(viewsets.ViewSet):
         super().__init__(**kwargs)
         self.service = OrderService()
 
+   
     # GET /api/orders/
     @extend_schema(
         summary="Listar todos los pedidos",
@@ -83,24 +84,18 @@ class OrderController(viewsets.ViewSet):
     )
     def list(self, request):
         try:
+            # Ahora esto llamará al nuevo método con 'requests' que acabamos de hacer
             orders = self.service.get_all_orders()
             return Response({"success": True, "data": orders}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
     # POST /api/orders/
     @extend_schema(
         summary="Crear un nuevo pedido",
         description="Registra una nueva orden. Se comunicará con el schema 'pedidos'.",
-        parameters=[
-            OpenApiParameter(
-                name="Authorization",
-                description="Token JWT del usuario (ej: Bearer eyJhb...)",
-                required=True,
-                type=str,
-                location=OpenApiParameter.HEADER
-            )
-        ],
+        # ¡Eliminamos el bloque 'parameters' de aquí! Swagger ya sabe qué hacer gracias a tu settings.py
         request=OrderSerializer,
         responses={
             201: inline_serializer(
@@ -121,8 +116,8 @@ class OrderController(viewsets.ViewSet):
                     "user_id": "usr_998877",
                     "order_type": "NATIONAL",
                     "items": [
-                        {"product_id": "prod_123", "amount": 2},
-                        {"product_id": "prod_456", "amount": 1}
+                        {"product_id": 1, "amount": 2}, # Nota: Cambié "prod_123" por 1 (entero) según tu BD
+                        {"product_id": 2, "amount": 1}
                     ]
                 }
             )
