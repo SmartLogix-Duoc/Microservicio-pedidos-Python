@@ -1,49 +1,67 @@
+import json
+import select
+import psycopg2
+import os
 from django.core.management.base import BaseCommand
-from pedidos.repositories.supabase_client import OrderRepository
 
 class Command(BaseCommand):
-    help = 'Escucha cambios en tiempo real en la colección de pedidos mediante MongoDB Change Streams'
+    help = 'Escucha cambios de estado en los pedidos en tiempo real usando PostgreSQL LISTEN/NOTIFY'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.SUCCESS("Iniciando vigilante de Change Streams..."))
+        self.stdout.write(self.style.SUCCESS("Iniciando vigilante de Supabase (PostgreSQL)..."))
         
-        try:
-            repo = OrderRepository()
-            collection = repo.collection
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error al conectar con MongoDB: {e}"))
+        # Obtenemos la conexión directa a la BD desde tu entorno
+        db_url = os.getenv("SUPABASE_POSTGRES_URL")
+        if not db_url:
+            self.stdout.write(self.style.ERROR("❌ Falta la variable SUPABASE_POSTGRES_URL en el entorno o .env"))
             return
 
-        # 1. Agregamos 'delete' a la lista de operaciones escuchadas
-        pipeline = [
-            {'$match': {'operationType': {'$in': ['insert', 'update', 'delete']}}}
-        ]
-
-        self.stdout.write(self.style.WARNING("Esperando cambios... (Presiona Ctrl+C para salir)"))
+        try:
+            # Nos conectamos directamente a la capa de PostgreSQL de Supabase
+            conn = psycopg2.connect(db_url)
+            # Autocommit es obligatorio para usar LISTEN
+            conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            cursor = conn.cursor()
+            
+            # Nos suscribimos al canal que creamos en el SQL
+            cursor.execute("LISTEN order_status_changes;")
+            self.stdout.write(self.style.WARNING(" Esperando cambios de estado... (Presiona Ctrl+C para salir)"))
+            
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Error al conectar con PostgreSQL: {e}"))
+            return
 
         try:
-            with collection.watch(pipeline) as stream:
-                for change in stream:
-                    self.stdout.write(self.style.SUCCESS("\n¡Cambio detectado en MongoDB!"))
-                    
-                    op_type = change.get("operationType")
-                    # El documentKey._id siempre está presente, incluso en deletes
-                    doc_id = change.get("documentKey", {}).get("_id")
+            # Bucle infinito escuchando silenciosamente
+            while True:
+                # select.select pone a dormir el proceso hasta que llega algo por la conexión
+                if select.select([conn], [], [], 5) == ([], [], []):
+                    pass
+                else:
+                    conn.poll()
+                    while conn.notifies:
+                        notify = conn.notifies.pop(0)
+                        payload = json.loads(notify.payload)
+                        
+                        order_id = payload.get("order_id")
+                        new_status = payload.get("status")
 
-                    if op_type == "insert":
-                        full_doc = change.get("fullDocument", {})
-                        self.stdout.write(f" NUEVO PEDIDO | MongoID: {doc_id} | UUID: {full_doc.get('order_id')} | Estado: {full_doc.get('status')}")
-                    
-                    elif op_type == "update":
-                        updated_fields = change.get("updateDescription", {}).get("updatedFields", {})
-                        self.stdout.write(f" PEDIDO ACTUALIZADO | MongoID: {doc_id} | Cambios: {updated_fields}")
-                    
-                    # 2. Manejo del evento ELIMINADO
-                    elif op_type == "delete":
-                        self.stdout.write(self.style.NOTICE(f"🔴 PEDIDO ELIMINADO | MongoID: {doc_id}"))
-                        self.stdout.write("Nota: En 'delete', MongoDB solo reporta el ID del documento que dejó de existir.")
-                                
+                        self.stdout.write(self.style.SUCCESS("\n¡Cambio de estado detectado!"))
+                        self.stdout.write(f" PEDIDO ACTUALIZADO | UUID: {order_id} | Nuevo Estado: {new_status}")
+                        
+                        # ==========================================
+                        # 🚀 FASE 2: INTEGRACIÓN WHATSAPP (A FUTURO)
+                        # ==========================================
+                        # Aquí es exactamente donde harás:
+                        # if new_status == 'SHIPPED':
+                        #     send_whatsapp_message(order_id, "¡Tu pedido va en camino!")
+                        # ==========================================
+
         except KeyboardInterrupt:
             self.stdout.write(self.style.ERROR("\n🛑 Vigilante detenido manualmente."))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"\n❌ Error en el Change Stream: {str(e)}"))
+            self.stdout.write(self.style.ERROR(f"\n Error en el flujo de conexión: {str(e)}"))
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
