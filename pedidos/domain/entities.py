@@ -18,6 +18,7 @@ class Order(BaseModel):
     order_type: OrderType
     status: str = OrderState.WAITING.value
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    warehouse_id: int = Field(default=1, description="ID de la bodega de origen")
 
     def calculate_total(self):
         suma = sum(item.unit_price * item.amount for item in self.items)

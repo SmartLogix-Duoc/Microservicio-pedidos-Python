@@ -1,23 +1,27 @@
+# pedidos/controllers/api_v1.py
+import base64
+import json
 from enum import Enum
 from rest_framework import serializers, status, viewsets
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, inline_serializer
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse, inline_serializer
 from rest_framework.permissions import AllowAny
 
 from pedidos.services.order_service import OrderService
+
 
 # ==========================================
 # 1. ENUMS
 # ==========================================
 class OrderState(str, Enum):
     PROCCESING = "Procesando"
-    WAITING = "Pendiente"
-    CANCELED = "Cancelado"
-    DELIVERED = "Entregado"
-    SHIPPED = "Enviado"
+    WAITING    = "Pendiente"
+    CANCELED   = "Cancelado"
+    DELIVERED  = "Entregado"
+    SHIPPED    = "Enviado"
 
 class OrderType(str, Enum):
-    NATIONAL = "NATIONAL"
+    NATIONAL      = "NATIONAL"
     INTERNATIONAL = "INTERNATIONAL"
 
 
@@ -25,19 +29,19 @@ class OrderType(str, Enum):
 # 2. SERIALIZERS
 # ==========================================
 class ItemOrderSerializer(serializers.Serializer):
-    product_id = serializers.CharField(help_text="ID del producto en el inventario")
-    amount = serializers.IntegerField(help_text="Cantidad a pedir")
+    product_id = serializers.IntegerField(help_text="ID del producto en el inventario")
+    amount     = serializers.IntegerField(help_text="Cantidad a pedir")
 
 class OrderSerializer(serializers.Serializer):
-    order_id = serializers.CharField(read_only=True)
-    user_id = serializers.CharField(max_length=100)
+    order_id   = serializers.CharField(read_only=True)
+    user_id    = serializers.CharField(read_only=True)
     order_type = serializers.ChoiceField(choices=[e.value for e in OrderType])
-    total = serializers.FloatField(read_only=True)
-    status = serializers.ChoiceField(
-        choices=[e.value for e in OrderState], 
+    total      = serializers.FloatField(read_only=True)
+    status     = serializers.ChoiceField(
+        choices=[e.value for e in OrderState],
         default=OrderState.WAITING.value
     )
-    items = ItemOrderSerializer(many=True) 
+    items = ItemOrderSerializer(many=True)
 
 class OrderStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
@@ -47,25 +51,24 @@ class OrderStatusUpdateSerializer(serializers.Serializer):
 
 class OrderUpdateResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
-    datos = OrderStatusUpdateSerializer()
+    datos   = OrderStatusUpdateSerializer()
 
 class ErrorResponseSerializer(serializers.Serializer):
     success = serializers.BooleanField(default=False)
-    error = serializers.CharField(help_text="Descripción detallada del problema")
+    error   = serializers.CharField(help_text="Descripción detallada del problema")
 
 
 # ==========================================
 # 3. CONTROLLER (ViewSet)
 # ==========================================
 class OrderController(viewsets.ViewSet):
-    authentication_classes = [] 
-    permission_classes = [AllowAny] 
-    
+    authentication_classes = []
+    permission_classes     = [AllowAny]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.service = OrderService()
 
-   
     # GET /api/orders/
     @extend_schema(
         summary="Listar todos los pedidos",
@@ -84,25 +87,30 @@ class OrderController(viewsets.ViewSet):
     )
     def list(self, request):
         try:
-            # Ahora esto llamará al nuevo método con 'requests' que acabamos de hacer
             orders = self.service.get_all_orders()
             return Response({"success": True, "data": orders}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     # POST /api/orders/
     @extend_schema(
         summary="Crear un nuevo pedido",
-        description="Registra una nueva orden. Se comunicará con el schema 'pedidos'.",
-        # ¡Eliminamos el bloque 'parameters' de aquí! Swagger ya sabe qué hacer gracias a tu settings.py
+        description="Registra una nueva orden. El user_id se extrae automáticamente del token JWT.",
         request=OrderSerializer,
         responses={
             201: inline_serializer(
                 name='CreateOrderResponse',
                 fields={
                     'success': serializers.BooleanField(),
-                    'data': OrderSerializer()
+                    'data': inline_serializer(
+                        name='CreateOrderData',
+                        fields={
+                            'order_id': serializers.CharField(),
+                            'total': serializers.FloatField(),
+                            'items': ItemOrderSerializer(many=True),
+                            'message': serializers.CharField(),
+                        }
+                    )
                 }
             ),
             400: ErrorResponseSerializer,
@@ -113,10 +121,9 @@ class OrderController(viewsets.ViewSet):
             OpenApiExample(
                 "Ejemplo de Pedido",
                 value={
-                    "user_id": "usr_998877",
                     "order_type": "NATIONAL",
                     "items": [
-                        {"product_id": 1, "amount": 2}, # Nota: Cambié "prod_123" por 1 (entero) según tu BD
+                        {"product_id": 1, "amount": 2},
                         {"product_id": 2, "amount": 1}
                     ]
                 }
@@ -127,18 +134,29 @@ class OrderController(viewsets.ViewSet):
         try:
             auth_header = request.headers.get('Authorization')
             if not auth_header:
-                return Response({"error": "No se proporcionó el header de Authorization"}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    {"error": "No se proporcionó el header de Authorization"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
             token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
+
+            # Extraer userId del payload del JWT sin validar firma
+            payload_b64 = token.split('.')[1]
+            payload_b64 += '=' * (4 - len(payload_b64) % 4)
+            payload = json.loads(base64.b64decode(payload_b64).decode('utf-8'))
+            user_id = str(payload.get('userId'))
+
             data = request.data
-            
+
             new_order = self.service.process_new_order(
-                user_id=data.get('user_id'), 
-                items_raw=data.get('items'), 
+                user_id=user_id,
+                items_raw=data.get('items', []),
                 order_type=data.get('order_type'),
-                token=token 
+                token=token
             )
             return Response({"success": True, "data": new_order}, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -160,11 +178,16 @@ class OrderController(viewsets.ViewSet):
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         actualizado = self.service.update_order_status(pk, serializer.validated_data.get('status'))
-
         if not actualizado:
-            return Response({"error": f"No se pudo actualizar. ID {pk} no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": f"No se pudo actualizar. ID {pk} no encontrado."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        return Response({"message": f"Pedido {pk} actualizado", "datos": serializer.validated_data}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"Pedido {pk} actualizado", "datos": serializer.validated_data},
+            status=status.HTTP_200_OK
+        )
 
     # DELETE /api/orders/{id}/
     @extend_schema(
