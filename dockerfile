@@ -1,5 +1,5 @@
 # 1. Usamos una imagen oficial de Python ligera
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # 2. Evitamos que Python genere archivos .pyc y forzamos a que la consola escupa los logs en tiempo real
 ENV PYTHONDONTWRITEBYTECODE=1
