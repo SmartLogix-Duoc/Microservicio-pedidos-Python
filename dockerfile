@@ -19,9 +19,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 6. Copiamos todo el resto del código de tu proyecto al contenedor
 COPY . /app/
 
-# 7. Le avisamos a Docker que este contenedor se comunicará por el puerto 8002
-EXPOSE 8002
+# 7. Le avisamos a Docker que este contenedor se comunicará por el puerto 8003
+EXPOSE 8003
 
 # 8. El comando para levantar tu servidor Django. 
 # IMPORTANTE: Usamos 0.0.0.0 para que acepte conexiones desde fuera del contenedor
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8002"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8003"]
