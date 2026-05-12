@@ -11,6 +11,8 @@ WORKDIR /app
 # 4. Copiamos el archivo de dependencias primero (para aprovechar el caché de Docker)
 COPY requirements.txt /app/
 
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # 5. Instalamos las dependencias
 RUN pip install --no-cache-dir -r requirements.txt
 
