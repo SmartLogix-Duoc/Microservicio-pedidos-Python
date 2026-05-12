@@ -1,8 +1,13 @@
 # pedidos/services/order_service.py
 from pedidos.repositories.OrderRepository import OrderRepository
 from pedidos.clients.inventory_client import InventoryApiClient
+import requests
+import jwt
+from pedidos.domain.enums import OrderState
+from datetime import datetime, timedelta, timezone
 
 
+ENVIOS_MS_URL = "http://localhost:8004"
 class OrderService:
     def __init__(self):
         self.repository = OrderRepository()
@@ -14,8 +19,48 @@ class OrderService:
     def get_order_by_id(self, order_id: str):
         return self.repository.get_by_id(order_id)
 
+    #Actualizado para conectar con el MS Envíos al pasar a SHIPPED
     def update_order_status(self, order_id: str, new_status: str):
-        return self.repository.update_status(order_id, new_status)
+        # Actualizar estado en BD
+        result = self.repository.update_status(order_id, new_status)
+
+        # Si el pedido pasa a SHIPPED → crear envío automáticamente
+        if new_status == OrderState.SHIPPED.value:
+            try:
+                order = self.repository.get_by_id(order_id)
+                print(f"DEBUG order: {order}")  # ← agregar
+                if order:
+                    payload = {
+                        "order_id": order_id,
+                        "warehouse_id": order.get("warehouse_id", 1),
+                        "order_type": order.get("order_type", "NATIONAL"),
+                    }
+                    print(f"DEBUG payload enviado a MS Envios: {payload}")  # ← agregar
+                    response = requests.post(
+                        f"{ENVIOS_MS_URL}/api/shipments/from-order",
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {self._get_service_token()}"
+                        },
+                        timeout=5,
+                    )
+                    print(f"DEBUG respuesta MS Envios: {response.status_code} {response.text}")  # ← agregar
+            except Exception as e:
+                print(f"Warning: No se pudo crear el envío automáticamente: {e}")
+                # No bloqueamos el flujo si el MS Envíos falla
+        return result
+
+    def _get_service_token(self) -> str:
+        """
+        Token JWT para comunicación entre microservicios.
+        Debe ser el mismo JWT_SECRET_KEY que usa el MS Envíos.
+        """
+        payload = {
+            "sub": "ms-pedidos",
+            "role": "ADMIN",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=30)
+            }
+        return jwt.encode(payload, "91896272b47078739308e151776c91314b6e7a543ed405cac938f17e30b92c16", algorithm="HS256")
 
     def delete_order(self, order_id: str):
         self.repository.delete(order_id)
