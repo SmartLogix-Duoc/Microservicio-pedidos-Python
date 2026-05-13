@@ -31,7 +31,6 @@ class OrderType(str, Enum):
 class ItemOrderSerializer(serializers.Serializer):
     product_id = serializers.IntegerField(help_text="ID del producto en el inventario")
     amount     = serializers.IntegerField(help_text="Cantidad a pedir")
-    unit_price = serializers.FloatField(help_text="Precio unitario al momento de la compra", required=False)
 
 class OrderSerializer(serializers.Serializer):
     order_id   = serializers.CharField(read_only=True)
