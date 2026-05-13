@@ -7,7 +7,7 @@ from pedidos.domain.enums import OrderState
 from datetime import datetime, timedelta, timezone
 
 
-ENVIOS_MS_URL = "http://localhost:8004"
+ENVIOS_MS_URL = "http://ms_envios:8004"
 class OrderService:
     def __init__(self):
         self.repository = OrderRepository()
