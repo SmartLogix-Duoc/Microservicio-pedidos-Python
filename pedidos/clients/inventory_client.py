@@ -17,7 +17,7 @@ class InventoryApiClient:
 
     def find_warehouse(self, product_id: int, qty: int, token: str) -> int:
         """Pregunta a Java en qué bodega hay stock suficiente para este producto."""
-        url = f"{self.base_url}/find-warehouse/"
+        url = f"{self.base_url}/find-warehouse"
         params = {"productId": product_id, "quantity": qty}
 
         response = requests.get(url, headers=self.get_headers(token), params=params, timeout=5)
