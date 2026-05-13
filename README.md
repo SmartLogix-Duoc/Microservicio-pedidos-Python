@@ -3,7 +3,7 @@
 
 Este repositorio contiene el microservicio encargado de automatizar la validación, asignación y gestión del historial de pedidos para nuestra plataforma de e-commerce. 
 
-Este servicio está desarrollado por **Maximiliano Olguin** y forma parte de un ecosistema mayor de microservicios (junto con Inventario en Spring Boot y Envíos en FastAPI).
+Este servicio está desarrollado por **Maximiliano Olguin** y forma parte de un ecosistema mayor de microservicios (junto con Inventario en Spring Boot, Autenticacion en Spring Boot y Envíos en FastAPI).
 
 ### 1. Clonar el repositorio y crear el entorno virtual
 ```bash
@@ -36,3 +36,4 @@ python manage.py runserver
     .env
     EJEMPLO
     supabase_url=<Contraseña>Supabase.co
+
